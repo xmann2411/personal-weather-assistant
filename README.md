@@ -1,21 +1,26 @@
 # Personal Weather Assistant ☀️🤖
 
-Aplikacija koja kombinira **vremenske podatke (OpenWeatherMap)** i **AI analizu (Groq LLM)** te daje **personalizirane preporuke**: odjeća, aktivnosti, upozorenja i packing lista.
-
-**Stack:**  
-- Frontend: React + TypeScript (Create React App)  
-- Backend: FastAPI (Python)  
-- API: OpenWeatherMap (free tier)  
-- LLM: Groq API (free tier)
+An application that combines **weather data (OpenWeatherMap)** with **AI analysis (Groq LLM)** to provide **personalized recommendations** — clothing suggestions, outdoor activity ideas, weather alerts, and packing lists.
 
 ---
-## 🚀 Pokretanje (lokalno)
 
-### 0) Preduvjeti
-- Node.js LTS (npr. 18+)
-- Python 3.10+ (radi i novije)
-- OpenWeatherMap API ključ (free): https://home.openweathermap.org/api_keys  
-- Groq API ključ (free): https://console.groq.com/keys
+## 🧩 Tech Stack
+
+- **Frontend:** React + TypeScript (Create React App)  
+- **Backend:** FastAPI (Python)  
+- **API:** OpenWeatherMap (free tier)  
+- **LLM:** Groq API (free tier)
+
+---
+
+## 🚀 Running Locally
+
+### 0) Prerequisites
+
+- Node.js LTS (v18+)
+- Python 3.10+ (newer versions also work)
+- OpenWeatherMap API key (free): [https://home.openweathermap.org/api_keys](https://home.openweathermap.org/api_keys)  
+- Groq API key (free): [https://console.groq.com/keys](https://console.groq.com/keys)
 
 ---
 
@@ -29,52 +34,51 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# Kreiraj .env (vidi primjer dolje), pa:
-Kreiraj .env fajl u /backend direktoriju:
 
-OPENWEATHER_API_KEY=5a9e79e557cb0265ae5d9221d8e9f103
-
-Pokreni server:
+# Run the server:
 python -m uvicorn app:app --reload --port 8000
 
 
-Test:
+Test endpoints:
 http://localhost:8000/health → { "ok": true }
 http://localhost:8000/docs (Swagger)
 
-Napomena: OWM 5-day/3h forecast pokriva ~5 dana unaprijed. Za datume izvan raspona endpoint će vratiti poruku da nema prognoze.
+Note: The OWM “5-day/3-hour forecast” API provides data for about 5 days ahead.
+For dates outside this range, the endpoint will return a message saying no forecast is available.
+
+---
 
 ### 2) Frontend (React + TS)
-U drugom terminalu (root projekta):
+Open a second terminal (from the project root):
 npm install
 npm start
 
-Aplikacija je dostupna na:
+The app will be available at:
 http://localhost:3000
 
-## Struktura projekta:
+## Project Structure:
 PERSONALWEATHERASSISTANT2/
 ├── backend/ # FastAPI backend (Python)
 ├── src/ # React frontend (TypeScript)
-├── public/ # Statički fajlovi
+├── public/ # Static files
 ├── package.json # Frontend konfiguracija
 ├── requirements.txt # Backend zavisnosti
 └── README.md
 
-## Primjeri korištenja API-ja
+## API Usage Examples
 # Health check
 curl http://localhost:8000/health
 
-# Prognoza za određeni grad i datum
+# Weather forecast for a specific city and date
 curl "http://localhost:8000/weather?city=Samobor&date=2025-10-21"
 curl "http://localhost:8000/weather?city=Zagreb&date=2025-10-22"
 
 
-Planirane funkcionalnosti (roadmap):
-- Preporuke aktivnosti po vremenu
-- AI analiza prognoze
+## Planned Features (roadmap):
+- Weather-based activity recommendations
+- AI-powered forecast analysis
 - Offline cache (LocalStorage)
 
-Autor:
+## Author:
 Karla Axmann
 karla@brrax.hr
