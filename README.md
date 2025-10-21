@@ -1,51 +1,80 @@
-<<<<<<< HEAD
-# personal-weather-assistant
-Personal weather assistant with ai implementation
-=======
-# Getting Started with Create React App
+# Personal Weather Assistant ☀️🤖
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Aplikacija koja kombinira **vremenske podatke (OpenWeatherMap)** i **AI analizu (Groq LLM)** te daje **personalizirane preporuke**: odjeća, aktivnosti, upozorenja i packing lista.
 
-## Available Scripts
+**Stack:**  
+- Frontend: React + TypeScript (Create React App)  
+- Backend: FastAPI (Python)  
+- API: OpenWeatherMap (free tier)  
+- LLM: Groq API (free tier)
 
-In the project directory, you can run:
+---
+## 🚀 Pokretanje (lokalno)
 
-### `npm start`
+### 0) Preduvjeti
+- Node.js LTS (npr. 18+)
+- Python 3.10+ (radi i novije)
+- OpenWeatherMap API ključ (free): https://home.openweathermap.org/api_keys  
+- Groq API ključ (free): https://console.groq.com/keys
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+---
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+### 1) Backend (FastAPI)
 
-### `npm test`
+```bash
+cd backend
+python -m venv .venv
+.\.venv\Scripts\activate        # PowerShell (Windows)
+# source .venv/bin/activate     # macOS/Linux
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+pip install -r requirements.txt
 
-### `npm run build`
+# Kreiraj .env (vidi primjer dolje), pa:
+Kreiraj .env fajl u /backend direktoriju:
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+OPENWEATHER_API_KEY=5a9e79e557cb0265ae5d9221d8e9f103
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Pokreni server:
+python -m uvicorn app:app --reload --port 8000
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
-### `npm run eject`
+Test:
+http://localhost:8000/health → { "ok": true }
+http://localhost:8000/docs (Swagger)
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+Napomena: OWM 5-day/3h forecast pokriva ~5 dana unaprijed. Za datume izvan raspona endpoint će vratiti poruku da nema prognoze.
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### 2) Frontend (React + TS)
+U drugom terminalu (root projekta):
+npm install
+npm start
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+Aplikacija je dostupna na:
+http://localhost:3000
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## Struktura projekta:
+PERSONALWEATHERASSISTANT2/
+├── backend/ # FastAPI backend (Python)
+├── src/ # React frontend (TypeScript)
+├── public/ # Statički fajlovi
+├── package.json # Frontend konfiguracija
+├── requirements.txt # Backend zavisnosti
+└── README.md
 
-## Learn More
+## Primjeri korištenja API-ja
+# Health check
+curl http://localhost:8000/health
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+# Prognoza za određeni grad i datum
+curl "http://localhost:8000/weather?city=Samobor&date=2025-10-21"
+curl "http://localhost:8000/weather?city=Zagreb&date=2025-10-22"
 
-To learn React, check out the [React documentation](https://reactjs.org/).
->>>>>>> f78e627 (Initial commit)
+
+Planirane funkcionalnosti (roadmap):
+- Preporuke aktivnosti po vremenu
+- AI analiza prognoze
+- Offline cache (LocalStorage)
+
+Autor:
+Karla Axmann
+karla@brrax.hr
