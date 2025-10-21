@@ -61,8 +61,8 @@ PERSONALWEATHERASSISTANT2/
 ├── backend/ # FastAPI backend (Python)
 ├── src/ # React frontend (TypeScript)
 ├── public/ # Static files
-├── package.json # Frontend konfiguracija
-├── requirements.txt # Backend zavisnosti
+├── package.json # Frontend configuration
+├── requirements.txt # Backend requirements
 └── README.md
 
 ## API Usage Examples
