@@ -11,21 +11,26 @@ export default function Home() {
   const { data, loading, error, submit } = usePlan();
 
   return (
-    <div className="space-y-4">
+    <div className="stack">
       <SearchForm onSubmit={submit} disabled={loading} />
-      {loading && <div>Učitavanje…</div>}
-      {error && <div style={{ color: "red" }}>{error}</div>}
+      {loading && <div className="muted" aria-live="polite">Učitavanje…</div>}
+      {error && <div className="error" role="alert">{error}</div>}
 
       {data && (
         <>
           <WeatherCard location={data.location} date={data.date} weather={data.weather} />
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+          {data.source === "fallback" && (
+            <div className="notice">
+              AI servis trenutno nije dostupan – prikazane su osnovne preporuke na temelju pravila.
+            </div>
+          )}
+          <div className="card-grid">
             <OutfitCard outfit={data.plan.outfit} />
             <ActivitiesCard activities={data.plan.activities} />
             <AlertsCard alerts={data.plan.alerts} />
             <PackingCard items={data.plan.packing} />
-            <WhyDetails rationale={data.plan.rationale} />
           </div>
+          <WhyDetails rationale={data.plan.rationale} />
         </>
       )}
     </div>

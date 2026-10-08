@@ -1,38 +1,195 @@
-.App {
-  text-align: center;
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.app-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.app-header p {
+  margin: 4px 0 20px;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.stack > * + * {
+  margin-top: 16px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.875rem;
+}
+
+/* Forma */
+.search-form {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.field.grow {
+  flex: 1 1 220px;
+}
+
+.field input {
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.search-form button {
+  align-self: flex-start;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.search-form button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Kartice */
+.card {
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.card li + li {
+  margin-top: 6px;
+}
+
+.card p {
+  margin: 0;
+}
+
+.card-warning {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+
+.card-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.card details summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card details p {
+  margin-top: 8px;
+}
+
+/* Vrijeme */
+.weather-head {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.App-link {
-  color: #61dafb;
+.weather-head img {
+  margin: -8px -4px;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.weather-head h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.weather-head .muted::first-letter {
+  text-transform: uppercase;
+}
+
+.temps {
+  margin-left: auto;
+  font-size: 1.1rem;
+}
+
+.temps strong {
+  font-size: 1.8rem;
+}
+
+.weather-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card .weather-stats li + li {
+  margin-top: 0;
+}
+
+.weather-stats span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Poruke */
+.error,
+.notice {
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+
+.error {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+.notice {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
 }

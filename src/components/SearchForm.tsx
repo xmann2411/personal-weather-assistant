@@ -1,37 +1,65 @@
 import { useState } from "react";
 import { BuildPlanInput } from "../services/plan.service";
+import { addDays, toLocalISODate } from "../utils/date";
+
+const storage = {
+  get: (key: string) => { try { return localStorage.getItem(key) || ""; } catch { return ""; } },
+  set: (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* npr. privatni način */ } },
+};
 
 export default function SearchForm({ onSubmit, disabled }:{
   onSubmit: (i: BuildPlanInput) => void;
   disabled?: boolean;
 }) {
-  const [city, setCity] = useState(localStorage.getItem("city") || "");
-  const [date, setDate] = useState("");
+  const today = toLocalISODate(new Date());
+  // OWM 5-day/3-hour prognoza pokriva danas + idućih ~4-5 dana
+  const max = toLocalISODate(addDays(new Date(), 4));
+
+  const [city, setCity] = useState(storage.get("city"));
+  const [date, setDate] = useState(today);
+  const [notes, setNotes] = useState(storage.get("preferences"));
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!city || !date) return;
-    localStorage.setItem("city", city.trim());
-    onSubmit({ city: city.trim(), date });
+    const c = city.trim();
+    if (!c || !date) return;
+    storage.set("city", c);
+    storage.set("preferences", notes.trim());
+    onSubmit({ city: c, date, preferences: notes.trim() ? { notes: notes.trim() } : undefined });
   };
 
-  const today = new Date().toISOString().slice(0,10);
-  const max = new Date(Date.now() + 4*24*60*60*1000).toISOString().slice(0,10);
-
   return (
-    <form onSubmit={submit} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <input
-        placeholder="Grad (npr. Zagreb)"
-        value={city}
-        onChange={(e)=>setCity(e.target.value)}
-        style={{ padding: 8, border: "1px solid #ddd", borderRadius: 6, flex: "1 1 220px" }}
-      />
-      <input
-        type="date" value={date} min={today} max={max}
-        onChange={(e)=>setDate(e.target.value)}
-        style={{ padding: 8, border: "1px solid #ddd", borderRadius: 6 }}
-      />
-      <button disabled={disabled} style={{ padding: "8px 14px", borderRadius: 6 }}>
+    <form onSubmit={submit} className="search-form">
+      <div className="search-row">
+        <label className="field grow">
+          <span>Grad</span>
+          <input
+            placeholder="npr. Zagreb"
+            value={city}
+            onChange={(e)=>setCity(e.target.value)}
+            maxLength={100}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Datum</span>
+          <input
+            type="date" value={date} min={today} max={max}
+            onChange={(e)=>setDate(e.target.value)}
+            required
+          />
+        </label>
+      </div>
+      <label className="field">
+        <span>Preferencije (opcionalno)</span>
+        <input
+          placeholder="npr. putujem s djecom, volim muzeje, osjetljiv/a sam na hladnoću"
+          value={notes}
+          onChange={(e)=>setNotes(e.target.value)}
+          maxLength={300}
+        />
+      </label>
+      <button type="submit" disabled={disabled}>
         {disabled ? "Generiram..." : "Generiraj plan"}
       </button>
     </form>

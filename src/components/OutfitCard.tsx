@@ -1,7 +1,7 @@
 import { Outfit } from "../types/plan";
 export default function OutfitCard({ outfit }:{ outfit: Outfit }) {
   return (
-    <section style={{ border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
+    <section className="card">
       <h3>Preporuka za odjeću</h3>
       <ul>
         <li>Gore: {outfit.top}</li>
