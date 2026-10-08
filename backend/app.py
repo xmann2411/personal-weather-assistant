@@ -1,59 +1,66 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from models import PlanIn, PlanOut, Location, WeatherSummary, PlanPayload, Outfit, Activity, Alert
-from services.weather import geocode, fetch_forecast, pick_slot, summarize
-from services.ai import build_prompt, call_groq
+import asyncio
+import logging
+from datetime import date
 
-app = FastAPI()
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+
+from config import CORS_ORIGINS
+from models import PlanIn, PlanOut, Location, WeatherSummary
+from services.weather import geocode, fetch_forecast, fetch_uv, pick_day, available_dates, summarize_day
+from services.ai import AIUnavailable, build_messages, generate_plan
+from services.fallback import rule_based_plan
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("app")
+
+app = FastAPI(title="Personal Weather Assistant API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    allow_origins=CORS_ORIGINS, allow_methods=["GET", "POST"], allow_headers=["*"],
 )
 
+
+async def load_weather(city: str, day: date) -> tuple[Location, dict]:
+    lat, lon, name, country = await geocode(city)
+    fc, uv = await asyncio.gather(fetch_forecast(lat, lon), fetch_uv(lat, lon, day))
+
+    slots = pick_day(fc, day)
+    if not slots:
+        days = available_dates(fc)
+        raise HTTPException(
+            404,
+            f"Nema prognoze za {day.strftime('%d.%m.%Y.')} Prognoza je dostupna "
+            f"od {days[0].strftime('%d.%m.')} do {days[-1].strftime('%d.%m.%Y.')}",
+        )
+
+    summary = summarize_day(slots, fc.get("city", {}).get("timezone", 0))
+    summary["uv"] = uv
+    return Location(name=name, country=country, lat=lat, lon=lon), summary
+
+
 @app.get("/health")
-def health(): return {"ok": True}
+def health():
+    return {"ok": True}
+
 
 @app.get("/weather")
-async def get_weather(city: str, date: str):
-    lat, lon, name, country = await geocode(city)
-    fc = await fetch_forecast(lat, lon)
-    slot = pick_slot(fc, date)
-    if not slot:
-        raise HTTPException(404, "Nema prognoze za taj datum (OWM 5-day limit).")
-    summary = summarize(slot)
-    return {
-        "location": {"name": name, "country": country, "lat": lat, "lon": lon},
-        "date": date,
-        "weather": summary
-    }
+async def get_weather(city: str = Query(min_length=1, max_length=100), date: date = Query()):
+    location, summary = await load_weather(city.strip(), date)
+    return {"location": location, "date": date, "weather": WeatherSummary(**summary)}
+
 
 @app.post("/plan", response_model=PlanOut)
 async def build_plan(req: PlanIn):
-    lat, lon, name, country = await geocode(req.city)
-    fc = await fetch_forecast(lat, lon)
-    slot = pick_slot(fc, req.date)
-    if not slot:
-        raise HTTPException(404, "Nema prognoze za taj datum (OWM 5-day limit).")
-    summary = summarize(slot)
+    location, summary = await load_weather(req.city.strip(), req.date)
+    place = f"{location.name}, {location.country}" if location.country else location.name
 
-    prompt = build_prompt(f"{name}, {country or ''}", req.date, summary, req.preferences or {})
     try:
-        plan_json = await call_groq(prompt)
-    except Exception:
-        # jednostavan rule-based fallback
-        alerts=[]
-        if summary["pop"]>=50: alerts.append({"type":"rain","message":"Velika šansa kiše; ponesi kišobran i vodootpornu obuću."})
-        if summary["wind"]>=8: alerts.append({"type":"wind","message":"Jak vjetar; izbjegni bicikl i planinarenje na izloženim mjestima."})
-        outfit={"top":"majica dugih rukava","bottom":"traperice","outerwear":"lagana jakna","shoes":"udobne tenisice","accessories":["boca vode"]}
-        plan_json={"outfit":outfit,"activities":[{"name":"šetnja kvartom","indoor":False,"timeSuggestion":"afternoon","note":"kratka lagana šetnja"}],
-                   "alerts":alerts,"packing":["voda","punjač"],"rationale":"Rule-based fallback jer AI nije dostupan."}
+        plan = await generate_plan(build_messages(place, req.date.isoformat(), summary, req.preferences))
+        source = "ai"
+    except AIUnavailable as e:
+        log.warning("Using rule-based fallback: %s", e)
+        plan = rule_based_plan(summary)
+        source = "fallback"
 
-    # mapiraj u pydantic modele
-    weather = WeatherSummary(**summary)
-    location = Location(name=name, country=country, lat=lat, lon=lon)
-    outfit = Outfit(**plan_json["outfit"])
-    activities = [Activity(**a) for a in plan_json["activities"]]
-    alerts = [Alert(**a) for a in plan_json["alerts"]]
-    plan = PlanPayload(outfit=outfit, activities=activities, alerts=alerts,
-                       packing=plan_json["packing"], rationale=plan_json["rationale"])
-    return PlanOut(location=location, date=req.date, weather=weather, plan=plan)
+    return PlanOut(location=location, date=req.date, weather=WeatherSummary(**summary), plan=plan, source=source)
