@@ -21,3 +21,11 @@ yarn-debug.log*
 yarn-error.log*
 
 backend/.env
+
+# python / backend
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.env

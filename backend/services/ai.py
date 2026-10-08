@@ -1,89 +1,116 @@
-import os, json, httpx
-from dotenv import load_dotenv
-load_dotenv()
-GROQ=os.getenv("GROQ_API_KEY")
+import json
+import logging
 
-def build_prompt(city, date, summary: dict, prefs: dict):
-    return f"""
-Ti si osobni asistent za vremensku prognozu. Analiziraj vremenske uvjete i vrati praktične savjete.  
-Odgovaraj na hrvatskom jeziku.  
-Vrati ISKLJUČIVO ispravan JSON koji odgovara ovoj strukturi:
-{{
-  "outfit": {{"top":"","bottom":"","outerwear":"","shoes":"","accessories":[]}},
-  "activities": [{{"name":"","indoor":false,"timeSuggestion":"morning|afternoon|evening","note":""}}],
-  "alerts": [{{"type":"rain|wind|uv|cold|heat|snow","message":""}}],
-  "packing": ["stavka1","stavka2"],
-  "rationale": "Kratko objašnjenje."
-}}
+import httpx
+from pydantic import ValidationError
 
-*Kontekst:*
-- Grad: {city}, Datum: {date}
-- Vrijeme (°C): minimalna {summary["min"]}, maksimalna {summary["max"]}, subjektivni osjećaj {summary["feels"]},  
-  vjetar {summary["wind"]} m/s, vjerojatnost oborina {summary["pop"]}%, UV indeks {summary["uv"]},  
-  vlažnost zraka {summary["humidity"]}%, stanje "{summary["desc"]}".
-- Preferencije korisnika: {json.dumps(prefs or {})}
+from config import GROQ_API_KEY, GROQ_MODELS
+from models import PlanPayload
 
-*Pravila:*
-- Ako je vjerojatnost oborina > 50% → predloži vodootpornu jaknu i obuću, te kišobran.
-- Ako je vjetar > 8 m/s → upozori na bicikliranje/pješačenje; preporuči vjetrootpornu odjeću.
-- Ako je UV indeks > 6 → predloži korištenje kreme sa SPF 30+ i nošenje kape/šešira.
-- Aktivnosti trebaju odgovarati vremenskim uvjetima; kad je kišovito ili vjetrovito, predloži aktivnosti u zatvorenom prostoru.
-- Preporučiti aktivnosti s obzirom na grad koji je odabran. 
+log = logging.getLogger(__name__)
 
-*Ideje za aktivnosti:*
-Aktivnosti u Zagrebu: šetnja Gornjim gradom, posjet Muzeju Mimara, kava u Tkalčićevoj ulici, šetnja po Sljemenu
-Aktivnosti u Splitu: posjet Dioklecijanovoj palači, šetnja Riva šetnicom, izlet na Marjan.
-Aktivnosti u Dubrovniku: šetnja zidinama, posjet starom gradu, vožnja žičarom do Srđa.
-Aktivnosti u Samoboru: šetnja centrom grada, posjet dvorcu Samobor, degustacija kremšnite.
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-*Primjeri:*
-**Primjer 1:**
-Zagreb, HR — 2025-10-21
-slaba kiša, min 9°C / max 11°C, vjetar 0.78 m/s, kiša 44%
-Preporuka za odjeću: majica dugih rukava, traperice, vodootporna jakna, vodootporne cipele ili čizme, kišobran
-Preporučene aktivnosti: posjet Muzeju Mimara, kava u Tkalčićevoj ulici, shopping u Arena Centru
-Upozorenja: velika šansa kiše; ponesi kišobran i vodootpornu obuću.
-Spakiraj: kišobran, rezervne čarape, punjač za telefon
-Zašto ove preporuke: Prognoza pokazuje slabu kišu tijekom dana, stoga je važno biti pripremljen za mokre uvjete. Aktivnosti u zatvorenom prostoru su idealne za ovaj dan.
 
-**Primjer 2:**
-Split, HR — 2025-07-15
-vedro, min 25°C / max 33°C, vjetar 5.14 m/s, kiša 0%, UV indeks 9
-Preporuka za odjeću: lagana majica, kratke hlače, sandale, sunčane naočale, kapa ili šešir
-Preporučene aktivnosti: posjet Dioklecijanovoj palači, šetnja Rivom, izlet na Marjan
-Upozorenja: visoki UV indeksi; koristi kremu sa SPF 30+ i nosi kapu ili šešir.
-Spakiraj: krema za sunčanje, voda, ručnik za plažu
-Zašto ove preporuke: Vruće i sunčano vrijeme s visokim UV indeksom zahtijeva laganu odjeću i zaštitu od sunca. Aktivnosti na otvorenom su savršene za uživanje u lijepom vremenu.
-"""
+class AIUnavailable(Exception):
+    """AI plan se ne može dobiti (nema ključa, greška API-ja ili neispravan odgovor)."""
 
-async def call_groq(prompt: str):
-    async def call_groq_with_model(model_name: str, prompt: str):
-        headers = {"Authorization": f"Bearer {GROQ}", "Content-Type": "application/json"}
-        body = {
-            "model": model_name,
+
+SYSTEM_PROMPT = """
+Ti si osobni asistent za vremensku prognozu. Analiziraj vremenske uvjete i vrati praktične savjete.
+Odgovaraj na hrvatskom jeziku.
+Vrati ISKLJUČIVO ispravan JSON objekt (bez markdowna i dodatnog teksta) ove strukture:
+{
+  "outfit": {"top": "", "bottom": "", "outerwear": "", "shoes": "", "accessories": [""]},
+  "activities": [{"name": "", "indoor": false, "timeSuggestion": "morning|afternoon|evening", "note": ""}],
+  "alerts": [{"type": "rain|wind|uv|cold|heat|snow", "message": ""}],
+  "packing": [""],
+  "rationale": "Kratko objašnjenje (1-3 rečenice)."
+}
+
+Pravila:
+- Ako je vjerojatnost oborina > 50% → predloži vodootpornu jaknu i obuću te kišobran, i dodaj alert "rain".
+- Ako je vjetar > 8 m/s → upozori na bicikliranje/pješačenje, preporuči vjetrootpornu odjeću i dodaj alert "wind".
+- Ako je UV indeks >= 6 → predloži kremu sa SPF 30+ i kapu/šešir te dodaj alert "uv". Ako je UV nepoznat, ne izmišljaj ga.
+- Ako je maksimalna temperatura >= 30 °C dodaj alert "heat"; ako je minimalna <= 0 °C dodaj alert "cold".
+- Ako je u opisu snijeg, dodaj alert "snow".
+- Ako nema razloga za upozorenje, "alerts" je prazna lista.
+- Predloži 3-4 aktivnosti prilagođene vremenu i odabranom gradu (konkretna mjesta u tom gradu kad ih znaš).
+  Kad je kišovito ili vjetrovito, prednost daj aktivnostima u zatvorenom.
+- Poštuj preferencije korisnika ako su navedene.
+- timeSuggestion mora biti točno jedna od vrijednosti: morning, afternoon, evening.
+
+Primjeri aktivnosti:
+- Zagreb: šetnja Gornjim gradom, Muzej Mimara, kava u Tkalčićevoj, šetnja Sljemenom
+- Split: Dioklecijanova palača, šetnja Rivom, izlet na Marjan
+- Dubrovnik: šetnja zidinama, stari grad, žičara do Srđa
+- Samobor: šetnja centrom, stari grad Samobor, degustacija kremšnite
+
+Primjer odgovora (Split, vedro, min 25 °C / max 33 °C, vjetar 5 m/s, kiša 0%, UV 9):
+{"outfit": {"top": "lagana pamučna majica", "bottom": "kratke hlače", "outerwear": "nije potrebna", "shoes": "sandale", "accessories": ["sunčane naočale", "šešir"]},
+ "activities": [{"name": "Dioklecijanova palača", "indoor": false, "timeSuggestion": "morning", "note": "obiđi prije najveće vrućine"},
+                {"name": "izlet na Marjan", "indoor": false, "timeSuggestion": "evening", "note": "hlad borove šume i pogled na zalazak"}],
+ "alerts": [{"type": "uv", "message": "Vrlo visok UV indeks; koristi SPF 30+ i nosi šešir."}, {"type": "heat", "message": "Vrućina do 33 °C; pij dovoljno vode i izbjegavaj sunce oko podneva."}],
+ "packing": ["krema za sunčanje", "boca vode", "ručnik za plažu"],
+ "rationale": "Vruće i sunčano vrijeme s visokim UV indeksom traži laganu odjeću i zaštitu od sunca; aktivnosti su smještene u jutro i večer."}
+""".strip()
+
+
+def build_messages(city: str, date: str, summary: dict, prefs: dict | None) -> list[dict]:
+    uv = summary.get("uv")
+    uv_text = f"{uv}" if uv is not None else "nepoznat"
+    context = (
+        f"Grad: {city}\nDatum: {date}\n"
+        f"Vrijeme: {summary['desc']}, minimalna {summary['min']} °C, maksimalna {summary['max']} °C, "
+        f"subjektivni osjećaj {summary['feels']} °C, vjetar do {summary['wind']} m/s, "
+        f"vjerojatnost oborina {summary['pop']}%, UV indeks {uv_text}, vlažnost zraka {summary['humidity']}%.\n"
+        f"Preferencije korisnika: {json.dumps(prefs or {}, ensure_ascii=False)}"
+    )
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": context},
+    ]
+
+
+def extract_json(text: str) -> dict:
+    """Izvlači JSON objekt iz odgovora modela (tolerira ```json ograde i tekst oko JSON-a)."""
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("U odgovoru modela nema JSON objekta")
+    return json.loads(text[start:end + 1])
+
+
+async def _call_model(client: httpx.AsyncClient, model: str, messages: list[dict]) -> PlanPayload:
+    resp = await client.post(
+        GROQ_URL,
+        headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+        json={
+            "model": model,
             "temperature": 0.4,
-            "max_tokens": 600,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers=headers,
-                json=body,
-            )
-            resp.raise_for_status()
-            text = resp.json()["choices"][0]["message"]["content"].strip()
-            if text.startswith("```"):
-                text = text.strip("`").split("json")[-1].strip()
-            return json.loads(text)
+            "max_tokens": 1200,
+            "response_format": {"type": "json_object"},
+            "messages": messages,
+        },
+    )
+    resp.raise_for_status()
+    text = resp.json()["choices"][0]["message"]["content"]
+    return PlanPayload.model_validate(extract_json(text))
 
-    try:
-        # Pokušaj s glavnim modelom
-        return await call_groq_with_model("llama-3.3-70b-versatile", prompt)
-    except httpx.HTTPStatusError as e:
-        # Ako prvi model javlja 400 — probaj alternativni
-        if e.response is not None and e.response.status_code == 400:
-            print("Model decommissioned, switching to llama-3.1-8b-instant")
-            return await call_groq_with_model("llama-3.1-8b-instant", prompt)
-        raise
 
+async def generate_plan(messages: list[dict]) -> PlanPayload:
+    if not GROQ_API_KEY:
+        raise AIUnavailable("GROQ_API_KEY nije postavljen")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for model in GROQ_MODELS:
+            try:
+                return await _call_model(client, model, messages)
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                log.warning("Groq model %s returned HTTP %s: %s", model, status, e.response.text[:200])
+                if status in (401, 403):
+                    break  # neispravan ključ - drugi model neće pomoći
+            except (httpx.RequestError, ValueError, KeyError, ValidationError) as e:
+                # json.JSONDecodeError je podklasa ValueError
+                log.warning("Groq model %s failed: %s", model, e)
+    raise AIUnavailable("Nijedan Groq model nije vratio ispravan plan")

@@ -4,10 +4,10 @@ interface Props {
 
 export default function WhyDetails({ rationale }: Props) {
   return (
-    <section style={{ border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
+    <section className="card">
       <details>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Zašto ove preporuke?</summary>
-        <p style={{ marginTop: 8 }}>{rationale}</p>
+        <summary>Zašto ove preporuke?</summary>
+        <p>{rationale}</p>
       </details>
     </section>
   );
